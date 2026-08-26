@@ -61,7 +61,7 @@ variable "tags" {
 
 # Set to "your-github-org/your-repo-name" to enable the GitHub Actions
 # backup workflow (.github/workflows/scylla-backup.yml). Leave null to skip
-# creating the GitHub OIDC provider/IAM role entirely — everything in
+# creating the GitHub OIDC provider/IAM role entirely. Everything in
 # github-oidc.tf is conditional on this being set.
 variable "github_repo" {
   type    = string

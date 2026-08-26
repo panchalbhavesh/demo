@@ -6,7 +6,7 @@
 -- SimpleStrategy, not NetworkTopologyStrategy: our StatefulSet doesn't set
 -- --endpoint-snitch, so ScyllaDB defaults to SimpleSnitch, which reports
 -- every node as datacenter "datacenter1" regardless of AZ. NetworkTopology
--- would need the real DC name (confirm with `nodetool status`) — SimpleStrategy
+-- would need the real DC name (confirm with `nodetool status`). SimpleStrategy
 -- sidesteps that and just replicates across the ring, which is fine for a
 -- single-DC demo like this one.
 CREATE KEYSPACE IF NOT EXISTS demo

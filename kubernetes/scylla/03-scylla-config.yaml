@@ -1,4 +1,4 @@
-# NOT currently used by 04-scylla-statefulset.yaml — the StatefulSet
+# NOT currently used by 04-scylla-statefulset.yaml. The StatefulSet
 # configures ScyllaDB entirely via command-line flags (simplest path for a
 # demo: no auth, default settings). Left here for later hardening: mount
 # this as /etc/scylla/scylla.yaml (or merge into it) once you want to turn

@@ -14,8 +14,8 @@ data:
     # with `kubectl cp` too), so we can't archive inside the pod. Streaming
     # each sstable file individually avoids needing tar anywhere.
     #
-    # Runs from outside the scylla pods (a CronJob pod, or a CI runner) —
-    # needs `kubectl` (pointed at the cluster) and `aws` CLI available, and an
+    # Runs from outside the scylla pods (a CronJob pod, or a CI runner).
+    # Needs `kubectl` (pointed at the cluster) and `aws` CLI available, and an
     # identity that can both exec into scylla pods and write to the S3 bucket.
     set -eu
 

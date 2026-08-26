@@ -3,7 +3,7 @@ name: ScyllaDB backup
 on:
   workflow_dispatch: {} # manual trigger from the Actions tab
   schedule:
-    - cron: "0 3 * * *" # daily at 03:00 UTC — mirrors the in-cluster CronJob
+    - cron: "0 3 * * *" # daily at 3 in the morning UTC, mirrors the in-cluster CronJob
 
 permissions:
   id-token: write # required for GitHub OIDC -> AWS role assumption

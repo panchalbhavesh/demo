@@ -20,7 +20,7 @@ terraform {
     }
   }
 
-  # Static backend config — no prompts on `terraform init`. Points at the
+  # Static backend config, no prompts on `terraform init`. Points at the
   # already-existing scylla-terraform-state bucket.
   backend "s3" {
     bucket  = "scylla-terraform-state"

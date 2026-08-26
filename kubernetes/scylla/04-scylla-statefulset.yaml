@@ -1,10 +1,10 @@
-# Plain StatefulSet ScyllaDB deployment — no Operator, no cert-manager.
+# Plain StatefulSet ScyllaDB deployment, no Operator, no cert-manager.
 # Simplest path for this demo: 3 replicas, one per AZ (best-effort via
 # topologySpreadConstraints + podAntiAffinity), gp3 EBS storage, no auth.
 #
-# Known ScyllaDB-on-k8s gotcha (hit and fixed once before in this project):
-# you MUST pass --broadcast-rpc-address alongside --rpc-address=0.0.0.0, or
-# ScyllaDB crash-loops with bad_configuration_error. Already handled below.
+# ScyllaDB needs --broadcast-rpc-address passed alongside
+# --rpc-address=0.0.0.0, or it crash-loops with bad_configuration_error.
+# Already handled below.
 apiVersion: v1
 kind: Service
 metadata:
@@ -56,7 +56,7 @@ spec:
       terminationGracePeriodSeconds: 90
       # Fresh EBS volumes mount as root:root. The official scylla image runs
       # as a non-root "scylla" user, which can't create /var/lib/scylla/data
-      # on a volume it doesn't own — this crash-loops with
+      # on a volume it doesn't own. This crash-loops with
       # "PermissionError: [Errno 13] Permission denied: '/var/lib/scylla/data'"
       # otherwise. fsGroup makes kubelet chown the volume's group to match on
       # mount, so the container can write to it.

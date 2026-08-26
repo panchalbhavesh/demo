@@ -1,6 +1,6 @@
 name: ScyllaDB restore
 
-# Manual trigger ONLY — restore is destructive (overwrites live sstables),
+# Manual trigger ONLY. Restore is destructive (overwrites live sstables),
 # so this deliberately has no schedule trigger. Requires typing "restore"
 # into the confirm input, on top of picking the backup tag, as a guard
 # against fat-fingering the wrong workflow run.
@@ -17,7 +17,7 @@ on:
         default: "demo"
         type: string
       confirm:
-        description: 'Type "restore" to confirm — this overwrites live data'
+        description: 'Type "restore" to confirm. This overwrites live data'
         required: true
         type: string
 
@@ -41,7 +41,7 @@ jobs:
       - name: Require explicit confirmation
         if: ${{ inputs.confirm != 'restore' }}
         run: |
-          echo "::error::confirm input must be exactly 'restore' — got '${{ inputs.confirm }}'. Aborting."
+          echo "::error::confirm input must be exactly 'restore', got '${{ inputs.confirm }}'. Aborting."
           exit 1
 
       - uses: actions/checkout@v4

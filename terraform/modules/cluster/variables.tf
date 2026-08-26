@@ -1,5 +1,5 @@
 variable "cluster_name" {
-  description = "REQUIRED: Unique EKS cluster name (also used for VPC name and tag discovery)."
+  description = "Unique EKS cluster name, also used for the VPC name and tag discovery."
   type        = string
 }
 
@@ -10,7 +10,7 @@ variable "kubernetes_version" {
 }
 
 variable "vpc_cidr" {
-  description = "REQUIRED: CIDR range for this cluster's VPC. Must not overlap another cluster's CIDR."
+  description = "CIDR range for this cluster's VPC. Must not overlap another cluster's CIDR."
   type        = string
 }
 

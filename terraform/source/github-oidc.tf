@@ -2,7 +2,7 @@
 # GitHub Actions OIDC federation for the backup workflow
 # (.github/workflows/scylla-backup.yml).
 #
-# No static AWS keys stored in GitHub — the workflow exchanges a
+# No static AWS keys stored in GitHub. The workflow exchanges a
 # short-lived GitHub-issued OIDC token for temporary AWS credentials via
 # this IAM role, scoped to exactly one repo.
 #
@@ -43,10 +43,10 @@ data "aws_iam_policy_document" "github_actions_assume" {
     #
     # Two patterns because GitHub's `sub` claim format varies: the classic
     # "repo:owner/repo:ref:..." form, and a newer one that embeds numeric
-    # owner/repo IDs — "repo:owner@<ownerId>/repo@<repoId>:ref:..." (added
-    # to stop a deleted-and-recreated repo of the same name from inheriting
-    # trust). Observed directly from this repo's actual token: confirmed via
-    # a debug step decoding the OIDC JWT, not assumed from docs.
+    # owner/repo IDs, "repo:owner@<ownerId>/repo@<repoId>:ref:..." (this
+    # stops a deleted-and-recreated repo of the same name from inheriting
+    # trust). GitHub's actual token used the newer form when I set this up,
+    # so both patterns are here to cover either case.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
@@ -95,7 +95,7 @@ resource "aws_iam_role_policy" "github_actions_backup" {
 }
 
 # Maps the IAM role to a Kubernetes RBAC group ("scylla-backup-ci") once it
-# authenticates — see rbac.yaml's Group-bound RoleBinding for what that
+# authenticates. See rbac.yaml's Group-bound RoleBinding for what that
 # group can actually do (same scoped exec permissions as the CronJob's
 # ServiceAccount, nothing more).
 resource "aws_eks_access_entry" "github_actions_backup" {

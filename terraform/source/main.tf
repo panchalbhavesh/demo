@@ -1,5 +1,5 @@
 ############################################################
-# SOURCE cluster — own Terraform state. This first pass creates
+# SOURCE cluster, own Terraform state. This first pass creates
 # ONLY the EKS cluster + Cluster Autoscaler. ScyllaDB, ScyllaDB
 # Manager, and the S3 backup bucket will be layered in as
 # separate follow-up steps once this cluster is confirmed good.
@@ -72,11 +72,12 @@ resource "helm_release" "cluster_autoscaler" {
   depends_on = [module.cluster]
 }
 
-# cert-manager and the ScyllaDB Operator are installed via kubectl/helm CLI,
-# not Terraform — see kubernetes/operator/README.md. Reason: unlike
-# Cluster Autoscaler (a plain Deployment), the Operator's Helm chart creates
-# CRDs that a later kubectl-applied ScyllaCluster resource depends on. Adding
-# them here isn't wrong, but it's inconsistent with the ScyllaCluster CR
-# itself already being kubectl-managed for CRD chicken-and-egg reasons — so
-# both are kept on the same mechanism instead of splitting the install
-# across Terraform and kubectl.
+# ScyllaDB itself is applied with kubectl, not Terraform (see the
+# kubernetes/scylla/ manifests). The reasoning: this project ended up using
+# a plain StatefulSet instead of the ScyllaDB Operator, but the same
+# argument would apply either way. Terraform's kubernetes_manifest provider
+# needs CRDs to exist at plan time, so if this ever moves to the Operator
+# (whose Helm chart creates its own CRDs), the ScyllaCluster resource would
+# still need to go in via kubectl, not Terraform. Keeping infra (Terraform)
+# and app-layer objects (kubectl) on separate mechanisms avoids that
+# chicken-and-egg problem entirely.

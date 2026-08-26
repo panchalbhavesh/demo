@@ -1,13 +1,13 @@
 # Runs backup.sh (from the ConfigMap) on a schedule, in-cluster.
 #
 # Image: alpine/k8s bundles kubectl + aws-cli + helm/terraform in one small
-# image — avoids building/maintaining a custom image just for this script.
+# image. Avoids building/maintaining a custom image just for this script.
 #
-# Auth: the scylla-backup ServiceAccount has no AWS keys at all — it
+# Auth: the scylla-backup ServiceAccount has no AWS keys at all. It
 # authenticates to S3 via EKS Pod Identity
 # (aws_eks_pod_identity_association.scylla_backup in backup.tf). RBAC
 # (rbac.yaml) grants it only pods get/list + pods/exec, scoped to this
-# namespace — enough to run nodetool and stream files, nothing more.
+# namespace. Enough to run nodetool and stream files, nothing more.
 apiVersion: batch/v1
 kind: CronJob
 metadata:

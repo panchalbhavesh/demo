@@ -32,8 +32,8 @@ module "vpc" {
   private_subnets = [for index in range(length(local.azs)) : cidrsubnet(var.vpc_cidr, 4, index)]
   public_subnets  = [for index in range(length(local.azs)) : cidrsubnet(var.vpc_cidr, 4, index + 8)]
 
-  # DEMO COST: one shared NAT Gateway. Best practice for resilience is one per AZ
-  # (set one_nat_gateway_per_az = true) — left off by default to keep the demo cheap.
+  # One shared NAT Gateway to keep this demo cheap. For resilience you'd
+  # want one per AZ instead, set one_nat_gateway_per_az = true for that.
   enable_nat_gateway     = true
   single_nat_gateway     = true
   one_nat_gateway_per_az = false
@@ -43,7 +43,7 @@ module "vpc" {
   public_subnet_tags = {
     "kubernetes.io/role/elb" = "1"
   }
-  # REQUIRED: Cluster Autoscaler discovers this node group's ASG via these tags.
+  # Cluster Autoscaler discovers this node group's ASG through these tags.
   private_subnet_tags = {
     "kubernetes.io/role/internal-elb"               = "1"
     "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
@@ -58,12 +58,10 @@ module "vpc" {
   tags = local.tags
 }
 
-# NOT USED: customer-managed KMS envelope encryption for Kubernetes Secrets is
-# skipped for this demo (secrets are still encrypted at rest by AWS's default
-# etcd encryption). Removing this also avoids collisions with any KMS
-# alias/key left over from an earlier apply attempt under the same cluster name.
-# Re-add a module "eks_kms" block + `encryption_config` on module.eks if you
-# want customer-managed key envelope encryption later.
+# Skipping customer-managed KMS envelope encryption for Kubernetes Secrets
+# in this demo. Secrets are still encrypted at rest through AWS's default
+# etcd encryption. Add a module "eks_kms" block and an `encryption_config`
+# on module.eks if you want customer-managed key envelope encryption.
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -76,22 +74,22 @@ module "eks" {
   subnet_ids               = module.vpc.private_subnets
   control_plane_subnet_ids = module.vpc.private_subnets
 
-  # BEST PRACTICE: API is always reachable from inside the VPC. Public access is opt-in
-  # and, when enabled, restricted to the CIDRs you list — never left as 0.0.0.0/0.
+  # API is always reachable from inside the VPC. Public access is opt-in via
+  # enable_public_endpoint, restricted to whatever CIDRs you pass in
+  # public_access_cidrs. This demo's tfvars sets it to 0.0.0.0/0 on purpose,
+  # so Terraform and kubectl can run from outside the VPC without a
+  # bastion or VPN. Tighten this to your own IP range for anything real.
   endpoint_private_access       = true
   endpoint_public_access        = var.enable_public_endpoint
   endpoint_public_access_cidrs  = var.enable_public_endpoint ? var.public_access_cidrs : null
 
-  # DEMO COST: CloudWatch control-plane logging intentionally left off (matches
-  # the project's original cost rule). Flip enabled_log_types + create_cloudwatch_log_group
-  # to enable it later. create_cloudwatch_log_group defaults to true independent of
-  # enabled_log_types, so it must be turned off explicitly or the module tries to
-  # create the log group anyway.
+  # CloudWatch control-plane logging is off to keep this cheap. Flip
+  # enabled_log_types and create_cloudwatch_log_group to turn it on.
+  # create_cloudwatch_log_group defaults to true regardless of
+  # enabled_log_types, so it needs to be turned off explicitly or the
+  # module creates the log group anyway.
   enabled_log_types           = []
   create_cloudwatch_log_group = false
-
-  # DEMO: no customer-managed KMS envelope encryption for Secrets — see note
-  # above module.eks_kms removal. AWS's default etcd encryption still applies.
 
   authentication_mode                      = "API_AND_CONFIG_MAP"
   enable_cluster_creator_admin_permissions = true
@@ -115,10 +113,11 @@ module "eks" {
     }
   }
 
-  # REQUIRED: single managed node group, fixed at var.node_desired_size (default 3),
-  # one per AZ. Cluster Autoscaler is installed (see helm release in source/main.tf)
-  # so this group CAN scale between node_min_size/node_max_size if those are widened
-  # later, but the demo pins min=desired=max so capacity stays predictable and cheap.
+  # One managed node group, fixed at var.node_desired_size (default 3), one
+  # per AZ. Cluster Autoscaler is installed (see the helm release in
+  # source/main.tf) so this group can scale between node_min_size and
+  # node_max_size if those are widened later, but for now min=desired=max
+  # so capacity stays predictable and cheap.
   eks_managed_node_groups = {
     (var.node_group_name) = {
       ami_type       = "AL2023_x86_64_STANDARD"
@@ -185,12 +184,13 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 }
 
-# NOTE: no standalone aws_eks_pod_identity_association for ebs-csi — the
-# module.eks addons block above creates and wires it via pod_identity_association,
-# which guarantees the role/association exist before the addon tries to start
-# controller pods. A separate top-level association resource here raced against
-# addon creation (no depends_on link) and caused the addon health check to time
-# out waiting for the controller pods to become ready.
+# No standalone aws_eks_pod_identity_association for ebs-csi here. The
+# module.eks addons block above creates and wires it via
+# pod_identity_association, which guarantees the role and association exist
+# before the addon tries to start controller pods. A separate top-level
+# association resource can race against addon creation if there's no
+# depends_on link, and the addon's health check will time out waiting for
+# controller pods to become ready.
 
 # --- Cluster Autoscaler: least-privilege pod-identity role ---
 data "aws_iam_policy_document" "cluster_autoscaler" {
