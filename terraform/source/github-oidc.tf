@@ -40,10 +40,20 @@ data "aws_iam_policy_document" "github_actions_assume" {
     # Restricts to this exact repo, any branch/tag/PR. Tighten to a specific
     # ref (e.g. "repo:${var.github_repo}:ref:refs/heads/main") if you only
     # want the workflow runnable from main.
+    #
+    # Two patterns because GitHub's `sub` claim format varies: the classic
+    # "repo:owner/repo:ref:..." form, and a newer one that embeds numeric
+    # owner/repo IDs — "repo:owner@<ownerId>/repo@<repoId>:ref:..." (added
+    # to stop a deleted-and-recreated repo of the same name from inheriting
+    # trust). Observed directly from this repo's actual token: confirmed via
+    # a debug step decoding the OIDC JWT, not assumed from docs.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      values = [
+        "repo:${var.github_repo}:*",
+        "repo:${split("/", var.github_repo)[0]}@*/${split("/", var.github_repo)[1]}@*:*",
+      ]
     }
   }
 }
