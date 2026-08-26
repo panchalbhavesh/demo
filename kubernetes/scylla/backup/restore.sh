@@ -3,15 +3,17 @@
 # and load them into the live cluster via `nodetool refresh`.
 #
 # Scope and assumptions (read before running):
-#   - Restores onto the SAME live cluster the backup was taken from, into
-#     tables that still exist. This is a "recover recent data loss on a
-#     running cluster" tool, not a full disaster-recovery / new-cluster
-#     restore. Backup paths encode the source table's on-disk directory
-#     name (which includes ScyllaDB's internal table UUID) — if the table
-#     was dropped and recreated since the backup, that UUID won't match
-#     anything live, and this script will skip it with a warning. Recreate
-#     the table first (its `schema.cql` is included in the backup, right
-#     alongside the sstables in S3) if that happens.
+#   - Restores onto the SAME live cluster the backup was taken from (same
+#     pod names), into tables that already exist — the keyspace/table
+#     schema must exist live before this runs (recreate it from the
+#     included `schema.cql` in S3, right next to the sstables, if needed).
+#   - The live target directory is looked up dynamically by table NAME,
+#     not by matching the backup's exact UUID-suffixed directory name.
+#     ScyllaDB assigns a new UUID whenever a table is (re)created, so if
+#     storage was wiped and the schema recreated from scratch, the new
+#     table's UUID will differ from the one baked into the backup's S3
+#     path — this still restores correctly onto whatever the CURRENT live
+#     directory for that table name is.
 #   - Only restores one keyspace at a time (default: "demo") — deliberately
 #     does not touch system/system_schema/system_distributed by default,
 #     since blindly overwriting those on a live cluster is how you actually
@@ -46,16 +48,21 @@ for pod in $PODS; do
 
   for table_prefix in $TABLE_DIRS; do
     table_dir=$(basename "$table_prefix") # e.g. "users-6f3a2b40817211f0..."
-    target="/var/lib/scylla/data/$KEYSPACE/$table_dir"
+    table_name=$(echo "$table_dir" | sed -E 's/-[0-9a-f]{32}$//')
 
-    if ! kubectl exec -n "$NAMESPACE" "$pod" -- test -d "$target" >/dev/null 2>&1; then
-      echo "-- $pod: $KEYSPACE/$table_dir does not exist live — skipping." \
-           "If this table was dropped and recreated, restore its schema" \
-           "from $prefix$table_dir/schema.cql first, then rerun. --" >&2
+    # Look up the CURRENT live directory for this table by name, not by the
+    # backup's exact (possibly stale) UUID — handles both "same table,
+    # never dropped" and "storage wiped, schema recreated with a new UUID".
+    target=$(kubectl exec -n "$NAMESPACE" "$pod" -- sh -c \
+      "ls -d /var/lib/scylla/data/$KEYSPACE/${table_name}-* 2>/dev/null | head -1")
+
+    if [ -z "$target" ]; then
+      echo "-- $pod: no live directory for $KEYSPACE.$table_name — skipping." \
+           "Create the keyspace/table first (schema is at" \
+           "$prefix$table_dir/schema.cql in S3), then rerun. --" >&2
       continue
     fi
 
-    table_name=$(echo "$table_dir" | sed -E 's/-[0-9a-f]{32}$//')
     echo "-- $pod: restoring $KEYSPACE.$table_name into $target --"
 
     FILES=$(aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$table_prefix" \
