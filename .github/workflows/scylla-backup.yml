@@ -1,0 +1,38 @@
+name: ScyllaDB backup
+
+on:
+  workflow_dispatch: {} # manual trigger from the Actions tab
+  schedule:
+    - cron: "0 3 * * *" # daily at 03:00 UTC — mirrors the in-cluster CronJob
+
+permissions:
+  id-token: write # required for GitHub OIDC -> AWS role assumption
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  EKS_CLUSTER_NAME: scylla-demo-source
+  SCYLLA_BACKUP_BUCKET: scylla-demo-source-backups
+  NAMESPACE: scylla
+  # Set this repo secret to the value of Terraform output
+  # `github_actions_backup_role_arn` (from terraform/source/github-oidc.tf)
+  # once var.github_repo has been set and applied.
+  AWS_ROLE_ARN: ${{ secrets.SCYLLA_BACKUP_ROLE_ARN }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC, no static keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Point kubectl at the cluster
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Run backup
+        run: sh kubernetes/scylla/backup/backup.sh

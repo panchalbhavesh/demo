@@ -1,0 +1,4 @@
+# SUPERSEDED — the backend config is now hardcoded directly in versions.tf
+# (bucket scylla-terraform-state) so `terraform init` no longer prompts for
+# bucket/key. This file isn't needed anymore; left in place rather than
+# deleted (no delete permission this session) — safe to remove by hand.

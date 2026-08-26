@@ -1,0 +1,23 @@
+# gp3 EBS-backed StorageClass for ScyllaDB data volumes.
+#
+# NOTE: this is EBS (network-attached), not the local NVMe storage class
+# ScyllaDB Operator's official reference deployments assume
+# (https://operator.docs.scylladb.com/stable/deploy-scylladb/reference-deployments/reference-deployment-eks.html
+# requires i4i.2xlarge-class instances with local instance-store NVMe +
+# the Local CSI Driver). Our node group runs m7i-flex.large, which has no
+# local NVMe, so gp3 EBS via the aws-ebs-csi-driver addon (already
+# installed on this cluster) is the only option. This trades some
+# throughput/latency for cost — acceptable for a demo per project scope,
+# NOT what ScyllaDB recommends for production.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: scylla-gp3-retain
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+  csi.storage.k8s.io/fstype: xfs
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Retain

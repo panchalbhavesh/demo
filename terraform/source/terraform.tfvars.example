@@ -1,0 +1,19 @@
+# DEMO ONLY. Copy to terraform.demo.tfvars and fill in real values before use.
+aws_region   = "us-east-2"
+cluster_name = "scylla-demo-source"
+vpc_cidr     = "10.40.0.0/16"
+
+# 1 managed node group, 3 fixed nodes, per the current requirement.
+node_instance_types = ["m7i-flex.large"]
+node_desired_size   = 3
+node_min_size       = 3
+node_max_size       = 3
+
+# Best practice keeps this false (private endpoint only, reach it via SSM/VPN/bastion).
+enable_public_endpoint = false
+public_access_cidrs    = []
+
+tags = {
+  Owner       = "platform-demo"
+  Environment = "demo"
+}

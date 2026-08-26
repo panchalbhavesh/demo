@@ -1,0 +1,53 @@
+# Runs backup.sh (from the ConfigMap) on a schedule, in-cluster.
+#
+# Image: alpine/k8s bundles kubectl + aws-cli + helm/terraform in one small
+# image — avoids building/maintaining a custom image just for this script.
+#
+# Auth: the scylla-backup ServiceAccount has no AWS keys at all — it
+# authenticates to S3 via EKS Pod Identity
+# (aws_eks_pod_identity_association.scylla_backup in backup.tf). RBAC
+# (rbac.yaml) grants it only pods get/list + pods/exec, scoped to this
+# namespace — enough to run nodetool and stream files, nothing more.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scylla-backup
+  namespace: scylla
+spec:
+  schedule: "0 3 * * *" # daily at 03:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          serviceAccountName: scylla-backup
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: alpine/k8s:1.30.0
+              command: ["sh", "/scripts/backup.sh"]
+              env:
+                - name: NAMESPACE
+                  value: scylla
+                - name: SCYLLA_BACKUP_BUCKET
+                  value: scylla-demo-source-backups # must match backup.tf's aws_s3_bucket.scylla_backups
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: script
+              configMap:
+                name: scylla-backup-script
+                defaultMode: 0555

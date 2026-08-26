@@ -1,0 +1,55 @@
+# Least-privilege identity for the backup job. Scoped to the "scylla"
+# namespace only — no cluster-wide access. This name ("scylla-backup") must
+# match aws_eks_pod_identity_association.scylla_backup.service_account in
+# terraform/source/backup.tf, since that's what grants S3 access
+# via EKS Pod Identity (no AWS keys in this ServiceAccount at all).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scylla-backup
+  namespace: scylla
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scylla-backup
+  namespace: scylla
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scylla-backup
+  namespace: scylla
+subjects:
+  - kind: ServiceAccount
+    name: scylla-backup
+    namespace: scylla
+roleRef:
+  kind: Role
+  name: scylla-backup
+  apiGroup: rbac.authorization.k8s.io
+---
+# Binds the GitHub Actions workflow's IAM role (mapped to this group via
+# aws_eks_access_entry.github_actions_backup in github-oidc.tf, only
+# created if var.github_repo is set) to the SAME scoped permissions as the
+# in-cluster CronJob — nothing broader.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scylla-backup-ci
+  namespace: scylla
+subjects:
+  - kind: Group
+    name: scylla-backup-ci
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: scylla-backup
+  apiGroup: rbac.authorization.k8s.io
