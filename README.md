@@ -185,13 +185,33 @@ aws s3 ls s3://scylla-demo-source-backups/ --recursive
    a GitHub repo secret named `SCYLLA_BACKUP_ROLE_ARN`.
 4. Run the workflow from the Actions tab, or wait for its daily schedule.
 
-### Restoring (manual — not automated in this demo)
+### Restoring
 
-Backups land at `s3://scylla-demo-source-backups/<tag>/<pod>/<keyspace>/<table>/`.
-To restore: download the sstable files for a table, copy them into the
-target pod's `/var/lib/scylla/data/<keyspace>/<table-uuid>/` (same tar-less
-streaming trick as backup), then run `nodetool refresh <keyspace> <table>`.
-Flagging this as a known gap rather than leaving it undocumented.
+`kubernetes/scylla/backup/restore.sh` pulls a chosen backup tag's sstable
+files back from S3 and loads them via `nodetool refresh`, same tar-less
+streaming approach as backup. Runs via the same in-cluster path or a
+dedicated GitHub Actions workflow (`.github/workflows/scylla-restore.yml`).
+
+Scope, deliberately: this restores onto the *same* live cluster the backup
+came from, into tables that still exist — a "recover recent data loss"
+tool, not a new-cluster/disaster-recovery restore. Backup paths encode the
+source table's on-disk directory name (including ScyllaDB's internal table
+UUID); if a table was dropped and recreated since the backup, that UUID
+won't match anything live, and the script skips it with a warning rather
+than silently doing nothing. Recreate the table first — its `schema.cql` is
+included right next to the sstables in S3 — then rerun.
+
+Manually:
+```bash
+NAMESPACE=scylla SCYLLA_BACKUP_BUCKET=scylla-demo-source-backups \
+  BACKUP_TAG=backup-20260826073528 RESTORE_KEYSPACE=demo \
+  sh kubernetes/scylla/backup/restore.sh
+```
+
+Via GitHub Actions: run the "ScyllaDB restore" workflow from the Actions
+tab. It requires typing `restore` into a confirmation input — the workflow
+has no schedule trigger and can only ever be run manually, since restore
+overwrites live data.
 
 ## Design notes
 
@@ -228,7 +248,7 @@ Flagging this as a known gap rather than leaving it undocumented.
 |---|---|
 | No authentication (`AllowAllAuthenticator`) | `PasswordAuthenticator` + `CassandraAuthorizer`, secrets management |
 | gp3 EBS storage, shared node group | Dedicated, tainted node pool on instance types with local NVMe (e.g. `i4i.2xlarge`), per ScyllaDB's own reference architecture |
-| No ScyllaDB Manager (repairs, restore automation) | Manager server + `ScyllaDBManagerTask` — backups themselves are already handled by the CronJob/GitHub Actions pipeline above; restore is manual for now |
+| No ScyllaDB Manager (repairs, more general restore-anywhere tooling) | Manager server + `ScyllaDBManagerTask` — backup and restore for this specific cluster are already handled by the pipeline above |
 | No monitoring | Prometheus + Grafana (ScyllaDB Operator ships dashboards for this) |
 | Public EKS API endpoint, unrestricted | Private-only endpoint + bastion/VPN/SSM, or restricted CIDRs |
 | Single AZ-spread StatefulSet, manual scaling | ScyllaDB Operator for declarative scaling, upgrades, node replacement |
@@ -239,6 +259,4 @@ Flagging this as a known gap rather than leaving it undocumented.
 - Target cluster (migration destination) and cluster-to-cluster migration
   tooling — the current backup pipeline moves data to S3, not to another
   live cluster.
-- Restore automation (backup path is scripted and verified; restore is a
-  manual, documented procedure — see "Restoring" above).
 - ScyllaDB Manager and a monitoring/observability stack.
