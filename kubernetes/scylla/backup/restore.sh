@@ -74,4 +74,16 @@ for pod in $PODS; do
   done
 done
 
+# A restore could plausibly land sstables on only some replicas (e.g. a pod
+# was unreachable when this backup was taken, or a partial run failed
+# midway). Rather than trust that every node ended up consistent, run an
+# anti-entropy repair across the keyspace before declaring success —
+# reconciles any drift automatically instead of leaving it for someone to
+# notice via mismatched SELECT COUNT(*) results later.
+echo "== Repairing $KEYSPACE to reconcile any cross-replica drift =="
+for pod in $PODS; do
+  echo "-- $pod: nodetool repair $KEYSPACE --"
+  kubectl exec -n "$NAMESPACE" "$pod" -- nodetool repair "$KEYSPACE"
+done
+
 echo "== Restore from $TAG complete. Verify with a SELECT before trusting it. =="

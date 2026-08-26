@@ -189,8 +189,14 @@ aws s3 ls s3://scylla-demo-source-backups/ --recursive
 
 `kubernetes/scylla/backup/restore.sh` pulls a chosen backup tag's sstable
 files back from S3 and loads them via `nodetool refresh`, same tar-less
-streaming approach as backup. Runs via the same in-cluster path or a
-dedicated GitHub Actions workflow (`.github/workflows/scylla-restore.yml`).
+streaming approach as backup, then runs `nodetool repair` on the keyspace
+across every pod before declaring success — a restore could plausibly land
+data on only some replicas (e.g. a pod unreachable during the original
+backup), so this reconciles any cross-replica drift automatically instead
+of leaving it for someone to notice later via mismatched `SELECT COUNT(*)`
+results (verified the hard way — see "Known limitations" below). Runs via
+the same in-cluster path or a dedicated GitHub Actions workflow
+(`.github/workflows/scylla-restore.yml`).
 
 Scope, deliberately: this restores onto the *same* live cluster the backup
 came from, into tables that still exist — a "recover recent data loss"
@@ -201,10 +207,30 @@ won't match anything live, and the script skips it with a warning rather
 than silently doing nothing. Recreate the table first — its `schema.cql` is
 included right next to the sstables in S3 — then rerun.
 
+### Known limitations (found through actual testing, not assumed)
+
+- **`TRUNCATE` permanently blocks restoring pre-truncation backups for that
+  table.** ScyllaDB (like Cassandra) records a truncation timestamp per
+  table; any data written at or before that point — including sstables
+  reloaded via `nodetool refresh` — is suppressed at read time regardless
+  of whether the files are physically present. This isn't a bug in
+  `restore.sh`; it's core database behavior, and there's no supported way
+  to undo it short of dropping and recreating the table. Confirmed directly:
+  restoring a backup taken before a `TRUNCATE` reloaded the sstables
+  successfully (no errors, `nodetool status` clean) but the data stayed
+  invisible on every node. If you need to test restore behavior, simulate
+  data loss by removing sstable files while ScyllaDB is stopped (e.g. via a
+  pod restart), not via `TRUNCATE`/`DELETE`.
+- **Directly deleting sstable files while ScyllaDB is running is unsafe.**
+  The process keeps an in-memory list of a table's sstables and doesn't
+  re-scan the directory on its own — removing files out from under a live
+  process risks read errors rather than a clean "empty" result. Stop the
+  pod (or let Kubernetes restart it) before removing files, not after.
+
 Manually:
 ```bash
 NAMESPACE=scylla SCYLLA_BACKUP_BUCKET=scylla-demo-source-backups \
-  BACKUP_TAG=backup-20260826073528 RESTORE_KEYSPACE=demo \
+  BACKUP_TAG=<tag-from-aws-s3-ls> RESTORE_KEYSPACE=demo \
   sh kubernetes/scylla/backup/restore.sh
 ```
 
